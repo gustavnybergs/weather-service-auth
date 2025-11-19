@@ -1,8 +1,10 @@
 package com.grupp3.weather.controller;
 
+import com.grupp3.weather.dto.PlaceDTO;
+import com.grupp3.weather.mapper.PlaceMapper;
 import com.grupp3.weather.model.Place;
 import com.grupp3.weather.service.PlaceService;
-import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -12,17 +14,16 @@ import java.util.List;
 public class PlaceController {
 
     private final PlaceService placeService;
+    private final PlaceMapper placeMapper;
 
-    public PlaceController(PlaceService placeService) {
+    public PlaceController(PlaceService placeService, PlaceMapper placeMapper) {
         this.placeService = placeService;
+        this.placeMapper = placeMapper;
     }
 
-    /**
-     * GET: Hämta alla tillgängliga platser
-     * Users kan se vilka platser som finns för att markera som favoriter
-     */
-    @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public List<Place> all() {
-        return placeService.findAll();
+    @GetMapping
+    public ResponseEntity<List<PlaceDTO>> getAllPlaces() {
+        List<Place> places = placeService.findAll();
+        return ResponseEntity.ok(placeMapper.toDTOList(places));
     }
 }

@@ -35,7 +35,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String username = null;
         String jwt = null;
 
-        // Extrahera token från "Bearer <token>"
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
             jwt = authorizationHeader.substring(7);
             try {
@@ -47,12 +46,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
 
-        // Sätt authentication i SecurityContext
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             Set<Role> roles = jwtUtil.extractRoles(jwt);
             
+            // Role enum already has ROLE_ prefix, don't add it again
             var authorities = roles.stream()
-                    .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
+                    .map(role -> new SimpleGrantedAuthority(role.name()))
                     .collect(Collectors.toList());
 
             UsernamePasswordAuthenticationToken authenticationToken = 
