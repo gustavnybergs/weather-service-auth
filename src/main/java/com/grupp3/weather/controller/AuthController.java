@@ -9,6 +9,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -21,6 +23,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
+    
     private final UserService userService;
     private final JwtUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
@@ -38,8 +42,11 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<Map<String, Object>> register(@Valid @RequestBody RegisterRequest request) {
         try {
+            log.info("Registration attempt for username: {}", request.username);
             User user = userService.registerUser(request.username, request.email, request.password);
             UserDTO userDTO = userMapper.toDTO(user);
+            
+            log.info("User registered successfully: {}", user.getUsername());
             
             Map<String, Object> response = Map.of(
                 "message", "User registered successfully",
@@ -48,6 +55,7 @@ public class AuthController {
             
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (IllegalArgumentException e) {
+            log.warn("Registration failed for username {}: {}", request.username, e.getMessage());
             Map<String, Object> error = Map.of("error", e.getMessage());
             return ResponseEntity.badRequest().body(error);
         }
@@ -56,8 +64,11 @@ public class AuthController {
     @PostMapping("/register-admin")
     public ResponseEntity<Map<String, Object>> registerAdmin(@Valid @RequestBody RegisterRequest request) {
         try {
+            log.info("Admin registration attempt for username: {}", request.username);
             User user = userService.registerAdmin(request.username, request.email, request.password);
             UserDTO userDTO = userMapper.toDTO(user);
+            
+            log.info("Admin user registered successfully: {}", user.getUsername());
             
             Map<String, Object> response = Map.of(
                 "message", "Admin user registered successfully",
@@ -66,6 +77,7 @@ public class AuthController {
             
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (IllegalArgumentException e) {
+            log.warn("Admin registration failed for username {}: {}", request.username, e.getMessage());
             Map<String, Object> error = Map.of("error", e.getMessage());
             return ResponseEntity.badRequest().body(error);
         }
@@ -74,6 +86,8 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<Map<String, Object>> login(@Valid @RequestBody LoginRequest request) {
         try {
+            log.info("Login attempt for username: {}", request.username);
+            
             Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.username, request.password)
             );
@@ -84,6 +98,8 @@ public class AuthController {
             String token = jwtUtil.generateToken(user.getUsername(), user.getRoles());
             UserDTO userDTO = userMapper.toDTO(user);
 
+            log.info("User logged in successfully: {}", user.getUsername());
+
             Map<String, Object> response = Map.of(
                 "message", "Login successful",
                 "token", token,
@@ -92,6 +108,7 @@ public class AuthController {
 
             return ResponseEntity.ok(response);
         } catch (AuthenticationException e) {
+            log.warn("Failed login attempt for username: {}", request.username);
             Map<String, Object> error = Map.of("error", "Invalid username or password");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
         }

@@ -1,6 +1,8 @@
 package com.grupp3.weather.controller;
 
 import com.grupp3.weather.service.WeatherService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -11,6 +13,7 @@ import java.util.Map;
 @RequestMapping("/admin")
 @PreAuthorize("hasRole('ADMIN')")
 public class AdminController {
+    private static final Logger log = LoggerFactory.getLogger(AdminController.class);
 
     private final WeatherService weatherService;
 
@@ -20,8 +23,7 @@ public class AdminController {
 
     @PostMapping("/weather/update")
     public ResponseEntity<Map<String, String>> triggerWeatherUpdate() {
-        // TODO: Hook up to scheduled weather update when that method is refactored
-        // For now just return confirmation that admin endpoint is working
+        log.info("Admin triggered manual weather update");
         return ResponseEntity.ok(Map.of(
             "message", "Weather update endpoint (manual trigger)", 
             "status", "Admin only - working!"
@@ -30,7 +32,7 @@ public class AdminController {
 
     @GetMapping("/stats")
     public ResponseEntity<Map<String, Object>> getStats() {
-        // Basic stats endpoint for admin dashboard
+        log.info("Admin accessed stats endpoint");
         return ResponseEntity.ok(Map.of(
             "message", "Admin stats endpoint",
             "status", "operational",
