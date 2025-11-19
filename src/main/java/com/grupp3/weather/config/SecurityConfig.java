@@ -1,30 +1,49 @@
 package com.grupp3.weather.config;
 
-import com.grupp3.weather.security.ApiKeyFilter;
-import com.grupp3.weather.security.DDoSProtectionFilter;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import com.grupp3.weather.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.Ordered;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
+@EnableWebSecurity
 public class SecurityConfig {
 
-    @Bean
-    public FilterRegistrationBean<ApiKeyFilter> apiKeyFilterRegistration(ApiKeyFilter filter) {
-        FilterRegistrationBean<ApiKeyFilter> reg = new FilterRegistrationBean<>();
-        reg.setFilter(filter);
-        reg.addUrlPatterns("/*");
-        reg.setOrder(Ordered.HIGHEST_PRECEDENCE);     // Kör först
-        return reg;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
     @Bean
-    public FilterRegistrationBean<DDoSProtectionFilter> ddosFilterRegistration(DDoSProtectionFilter filter) {
-        FilterRegistrationBean<DDoSProtectionFilter> reg = new FilterRegistrationBean<>();
-        reg.setFilter(filter);
-        reg.addUrlPatterns("/*");
-        reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 1); // Kör efter API key filter
-        return reg;
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/auth/**").permitAll()  // Tillåt registrering/login
+                .anyRequest().authenticated()                 // Kräv JWT för allt annat
+            )
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
     }
 }

@@ -14,21 +14,14 @@ import java.io.IOException;
 /**
  * ApiKeyFilter - autentisering-portier för admin-endpoints och skrivoperationer.
  *
- * Skiljer sig från andra säkerhetslager genom att fokusera på API-key validering
- * istället för rate limiting eller DDoS detection.
- *
  * Huvudfunktion:
  * - doFilterInternal(): Kontrollera om request kräver API-key och validera X-API-KEY header
  *
  * Säkerhetsregler implementerar:
  * - Öppen läsning: Alla GET requests tillåts utan API-key (bara hämta data)
  * - Skyddad skrivning: POST/PUT/DELETE kräver API-key (ändra systemet)
- * - Admin-skydd: Alla /admin/* endpoints kräver API-key oavsett HTTP-metod
+ * - Auth-undantag: /api/auth/* endpoints tillåts utan API-key (registrering/login)
  * - Användarundantag: /favorites/* endpoints tillåts för vanliga användare
- *
- * Filter-kedja position: FÖRSTA filter (Ordered.HIGHEST_PRECEDENCE) för tidig blockering.
- * Unauthorized requests får HTTP 401 och når aldrig Controller eller DDoSProtectionFilter.
- * Läser API-key från application.properties för säker konfiguration.
  */
 
 @Component
@@ -45,9 +38,13 @@ public class ApiKeyFilter extends OncePerRequestFilter {
         String path = req.getRequestURI();
         boolean isWrite = !HttpMethod.GET.matches(req.getMethod());
         boolean isFavoritesEndpoint = path.startsWith("/favorites");
+        boolean isAuthEndpoint = path.startsWith("/api/auth");
 
-        // Läsning (GET) tillåts utan nyckel, samt favorites-endpoints
-        if (isWrite && !isFavoritesEndpoint) {
+        // Tillåt utan API-key:
+        // - GET requests (läsning)
+        // - /favorites endpoints (användare)
+        // - /api/auth endpoints (registrering/login)
+        if (isWrite && !isFavoritesEndpoint && !isAuthEndpoint) {
             String provided = req.getHeader("X-API-KEY");
             if (provided == null || !provided.equals(expected)) {
                 res.setStatus(HttpServletResponse.SC_UNAUTHORIZED); // 401
