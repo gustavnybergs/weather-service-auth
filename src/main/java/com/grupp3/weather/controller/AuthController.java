@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/auth")  // ← ÄNDRAT FRÅN /auth
+@RequestMapping("/api/auth")
 public class AuthController {
     private final UserService userService;
     private final JwtUtil jwtUtil;
@@ -35,6 +35,26 @@ public class AuthController {
                 "message", "User registered successfully",
                 "username", user.getUsername(),
                 "email", user.getEmail()
+            );
+            
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> error = Map.of("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    // ← NYTT: Registrera admin (bara för testing/setup)
+    @PostMapping("/register-admin")
+    public ResponseEntity<Map<String, Object>> registerAdmin(@Valid @RequestBody RegisterRequest request) {
+        try {
+            User user = userService.registerAdmin(request.username, request.email, request.password);
+            
+            Map<String, Object> response = Map.of(
+                "message", "Admin user registered successfully",
+                "username", user.getUsername(),
+                "email", user.getEmail(),
+                "roles", user.getRoles()
             );
             
             return ResponseEntity.status(HttpStatus.CREATED).body(response);

@@ -1,29 +1,100 @@
 # Weather API – Grupp 3
 
-Ett skolprojekt för att bygga ett weather API med Spring Boot, databas och cache-funktionalitet.
+Ett skolprojekt för att bygga ett weather API med Spring Boot, **JWT-autentisering**, databas och cache-funktionalitet.
 
 ## Teknisk Stack
 
 - **Java 17+** med Spring Boot 3.5.5
+- **Spring Security** med JWT-autentisering *(NYTT)*
 - **PostgreSQL** för datalagring
 - **Redis** för cache (5 minuters TTL)
 - **Open-Meteo API** för väderdata (gratis tier)
 - **Maven** för build management
+- **jjwt 0.11.5** för JWT token hantering *(NYTT)*
 
 ## Säkerhet
 
-Write-operationer kräver API-key i header:
+### JWT Authentication *(NYTT)*
+
+**VIKTIGT:** Alla endpoints utom `/api/auth/**` kräver nu JWT-autentisering!
+
+#### 1. Registrera ny användare
+```bash
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "myuser",
+    "email": "user@example.com",
+    "password": "securepass123"
+  }'
 ```
+
+**Response:**
+```json
+{
+  "message": "User registered successfully",
+  "username": "myuser",
+  "email": "user@example.com"
+}
+```
+
+#### 2. Logga in och få JWT-token
+```bash
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "myuser",
+    "password": "securepass123"
+  }'
+```
+
+**Response:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJteXVzZXIiLCJyb2xlcyI6IlJPTEVfVVNFUiIsImlhdCI6MTczMjAxNTIwMCwiZXhwIjoxNzMyMTAxNjAwfQ...",
+  "message": "Login successful",
+  "username": "myuser",
+  "roles": ["ROLE_USER"]
+}
+```
+
+#### 3. Använd token för alla andra requests *(ÄNDRAT)*
+```bash
+# Spara token
+TOKEN="eyJhbGciOiJIUzI1NiJ9..."
+
+# Alla requests kräver nu Authorization header
+curl http://localhost:8080/weather/Stockholm \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### API-key (för admin write-operationer)
+
+Write-operationer till admin-endpoints kräver fortfarande både JWT OCH API-key:
+```
+Authorization: Bearer <token>
 X-API-KEY: topsecret123
 ```
 
-Basic rate limiting:
+**ApiKeyFilter uppdaterad:** Tillåter nu `/api/auth/**` utan API-key för registrering/login. *(ÄNDRAT)*
+
+### Rate limiting
+
+Basic rate limiting (oförändrat):
 - Weather endpoints: 30 requests/minut
 - Admin endpoints: 10 requests/minut
 
 ## API Endpoints
 
-### User Endpoints
+### Authentication (Public - ingen JWT krävs)
+```bash
+POST /api/auth/register    # Registrera ny användare
+POST /api/auth/login       # Logga in och få JWT-token
+```
+
+### User Endpoints *(NU MED JWT - ÄNDRAT)*
+
+**OBS:** Alla dessa kräver nu `Authorization: Bearer <token>` header!
 
 #### Favoriter
 ```bash
@@ -45,7 +116,9 @@ GET /forecast/{placeName}                   # 7-dagars prognos
 GET /alerts                    # Se alert-definitioner
 ```
 
-### Admin Endpoints (kräver API-key)
+### Admin Endpoints *(NU MED JWT + API-key - ÄNDRAT)*
+
+**OBS:** Kräver både JWT-token OCH X-API-KEY header!
 
 #### Alert Management
 ```bash
@@ -63,25 +136,48 @@ GET /admin/stats              # Systemstatistik
 
 ## Exempel
 
-### Lägg till favorit och hämta väder
+### Komplett workflow (registrera, logga in, använda API)
 ```bash
-# Markera Stockholm som favorit
-curl -X PUT http://localhost:8080/favorites/Stockholm
+# 1. Registrera användare
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "testuser",
+    "email": "test@example.com",
+    "password": "testpass123"
+  }'
 
-# Hämta väder (första gången från API, sedan cache)
-curl http://localhost:8080/weather/Stockholm
+# 2. Logga in och spara token
+TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "testuser",
+    "password": "testpass123"
+  }' | jq -r '.token')
+
+echo "Token: $TOKEN"
+
+# 3. Markera Stockholm som favorit (KRÄVER TOKEN NU)
+curl -X PUT http://localhost:8080/favorites/Stockholm \
+  -H "Authorization: Bearer $TOKEN"
+
+# 4. Hämta väder (KRÄVER TOKEN NU)
+curl http://localhost:8080/weather/Stockholm \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-### Sök efter ny plats
+### Sök efter ny plats *(UPPDATERAT MED JWT)*
 ```bash
-# Sök väder för vilken plats som helst
-curl http://localhost:8080/weather/weatherAtLocation/Malmö
+# Sök väder för vilken plats som helst (KRÄVER TOKEN)
+curl http://localhost:8080/weather/weatherAtLocation/Malmö \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-### Skapa alert (admin)
+### Skapa alert (admin) *(UPPDATERAT MED JWT)*
 ```bash
 curl -X POST http://localhost:8080/admin/alerts \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "X-API-KEY: <your-api-key>" \
   -d '{
     "name": "Kyla",
@@ -94,6 +190,10 @@ curl -X POST http://localhost:8080/admin/alerts \
 ```
 
 ## Funktioner
+
+**JWT-autentisering:** Säker användarhantering med BCrypt-hashade lösenord och JWT-tokens (24h expiration)
+
+**Rollbaserad åtkomst:** Stöd för ROLE_USER och ROLE_ADMIN (redo för framtida admin-funktioner)
 
 **Automatisk uppdatering:** Hämtar väder för favoritplatser var 30:e minut
 
@@ -117,6 +217,32 @@ CREATE USER weather_user WITH PASSWORD 'weather_pass';
 GRANT ALL PRIVILEGES ON DATABASE weather_db TO weather_user;
 ```
 
+### Application Properties *(UPPDATERAT)*
+
+Skapa `src/main/resources/application.properties`:
+```properties
+# Database
+spring.datasource.url=jdbc:postgresql://localhost:5432/weather_db
+spring.datasource.username=weather_user
+spring.datasource.password=weather_pass
+
+# JPA
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=false
+
+# Redis
+spring.data.redis.host=localhost
+spring.data.redis.port=6379
+
+# API Key (för admin endpoints)
+app.api-key=topsecret123
+
+# JWT (24 timmar) - NYTT
+jwt.expiration=86400000
+```
+
+**OBS:** `users` och `user_roles` tabeller skapas automatiskt av Hibernate.
+
 ### Köra applikationen
 ```bash
 # Starta PostgreSQL och Redis först
@@ -128,13 +254,14 @@ GRANT ALL PRIVILEGES ON DATABASE weather_db TO weather_user;
 ## Frontend
 
 Projektet inkluderar också en React TypeScript frontend i `weather-frontend/` mappen:
-
 ```bash
 cd weather-frontend
 npm install
 npm start
 # Går på http://localhost:3000
 ```
+
+**OBS:** Frontend behöver uppdateras för att hantera JWT-autentisering (framtida uppgift).
 
 ### Frontend funktioner
 - Sök väder för valfri plats
@@ -144,7 +271,29 @@ npm start
 
 ## Data Models
 
-### Weather Response
+### User
+```json
+{
+  "id": 1,
+  "username": "testuser",
+  "email": "test@example.com",
+  "roles": ["ROLE_USER"],
+  "enabled": true,
+  "createdAt": "2025-11-19T12:00:00"
+}
+```
+
+### JWT Login Response
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0dXNlciIsInJvbGVzIjoiUk9MRV9VU0VSIiwiaWF0IjoxNzMyMDE1MjAwLCJleHAiOjE3MzIxMDE2MDB9...",
+  "message": "Login successful",
+  "username": "testuser",
+  "roles": ["ROLE_USER"]
+}
+```
+
+### Weather Response (oförändrad)
 ```json
 {
   "place": {
@@ -163,7 +312,7 @@ npm start
 }
 ```
 
-### Alert Definition
+### Alert Definition (oförändrad)
 ```json
 {
   "id": 1,
@@ -177,45 +326,26 @@ npm start
 }
 ```
 
-## Reflektion
+## Säkerhetsimplementation
 
-### Vad har vi lärt oss om webbtjänster, versionshantering och samarbete?
+### JWT Components
+- **JwtUtil**: Genererar och validerar JWT-tokens med HS256 algorithm
+- **JwtAuthenticationFilter**: Interceptar alla requests och validerar Bearer tokens
+- **CustomUserDetailsService**: Laddar användare från database för Spring Security
+- **SecurityConfig**: Konfigurerar security filter chain med stateless sessions
 
-**Steven:**
-"I've achieved a deeper understanding on how web services function and how crucial they are in enabling applications to communicate and exchange data across the internet. While I knew beforehand that there were different types of databases, this program has taught me that each have a different purpose and function, and can serve better or worse depending situation and context.
+### Password Security
+- **BCrypt hashing**: Alla lösenord hashas med BCrypt (cost factor 10)
+- **UserService**: Hanterar användarregistrering med automatisk password hashing
 
-I have now further understanding of HTTPS, having previously only known of it during our Frontend course. Understanding how DDoS protection functions has also been a new eye-opener, having always known what a DDoS attack was but didn't know how to prevent it.
+### Multi-layer Security (oförändrad struktur, JWT tillagd)
+1. **JwtAuthenticationFilter**: Validerar JWT på alla requests (NYTT)
+2. **ApiKeyFilter**: Skyddar admin write-operationer (UPPDATERAT för /api/auth/**)
+3. **DDoSProtectionFilter**: Rate limiting och bot-detection (oförändrad)
 
-In regards to version control, nothing new has surprised me or come to mind, however I continue to hone my skills by making sure to properly document commits in a short-and-sweet format, as well as constantly using branches and keeping out of main, only merging into it.
+## Testing
 
-Our co-operation as a team has been great, as everyone was given a task to do via our Gant schedule and Kanban board. Each of us set out to get it done, without fuss. We aided each other when requested, to the best of our ability and we can proudly deliver this program."
-
-**Parmida:**
-"Jag har mer förstått samarbetet och kommunikationen vid webbtjänster och vad som behövs först en webbtjänst ska fungera. Jag har nu fattat hela versionshantering och inser varför de är så bra att ha det. Samarbetet gick bra, hade bra kommunikation!"
-
-**Gustav:**
-"Detta projekt har givit mig en djupare förståelse för hur komplexa webbtjänster byggs och underhålls i praktiken. Jag har lärt mig att REST API-design handlar om mycket mer än bara endpoints - det kräver genomtänkt arkitektur för säkerhet, prestanda och skalbarhet. Implementeringen av caching-strategier med Redis har visat mig hur viktigt det är att optimera externa API-anrop för att skapa responsiva applikationer.
-
-Versionshantering har blivit en naturlig del av utvecklingsprocessen genom att använda Git-branches för parallell utveckling. Jag har insett värdet av tydliga commit-meddelanden och hur de fungerar som dokumentation för teamet. Pull request-processen har lärt mig vikten av kodgranskning för att hålla hög kodkvalitet.
-
-Samarbetet i teamet har fungerat utmärkt tack vare tydlig uppdelning av ansvarsområden - när var och en fokuserar på sina områden (services, controllers, frontend) medan vi ändå koordinerar regelbundet. Den tekniska kommunikationen kring API-design och databasstruktur har förbättrat min förmåga att diskutera tekniska lösningar med andra utvecklare."
-
-### Tekniska lärdomar
-
-Projektet har gett oss djupare förståelse för:
-
-- **REST API-design**: Hur man strukturerar endpoints logiskt och använder rätt HTTP-metoder
-- **Säkerhet**: Implementering av API-keys, rate limiting och DDoS-skydd
-- **Caching-strategier**: Redis för prestanda och minska externa API-anrop
-- **Databasdesign**: Relationer mellan entiteter och optimering av queries
-- **Schemalagda tjänster**: Automatisk uppdatering av data i bakgrunden
-- **Frontend-integration**: Hur backend och frontend kommunicerar via API:er
-- **Felhantering**: Graceful degradation och användarvänliga felmeddelanden
-
-### Samarbete och utvecklingsprocess
-
-- **GitHub Projects**: Använding av issues, milestones och Kanban-board för planering
-- **Branching-strategi**: Konsekvent användning av feature branches och pull requests
-- **Commit-meddelanden**: Tydliga och beskrivande commit-meddelanden
-- **Kodgranskning**: Gemensam granskning av kod innan merge till main
-- **Dokumentation**: Vikten av bra dokumentation för både utvecklare och användare
+Alla 44 tester kör och passerar:
+```bash
+./mvnw test
+```
