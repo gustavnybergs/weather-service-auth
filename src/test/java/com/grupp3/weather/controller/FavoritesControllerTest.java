@@ -1,219 +1,195 @@
 package com.grupp3.weather.controller;
 
+import com.grupp3.weather.dto.PlaceDTO;
+import com.grupp3.weather.mapper.PlaceMapper;
 import com.grupp3.weather.model.Place;
 import com.grupp3.weather.service.PlaceService;
-import com.grupp3.weather.service.WeatherService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class FavoritesControllerTest {
 
-    @InjectMocks
-    private FavoritesController favoritesController;
-
     @Mock
     private PlaceService placeService;
 
     @Mock
-    private WeatherService weatherService;
+    private PlaceMapper placeMapper;
 
-    @Test
-    @DisplayName("markAsFavorite med befintlig plats ska markera som favorit")
-    void markAsFavorite_WithExistingPlace_ShouldMarkAsFavorite() {
-        // Arrange
-        Place place = new Place("Stockholm", 59.3293, 18.0686);
-        place.setFavorite(true);
+    @InjectMocks
+    private FavoritesController favoritesController;
 
-        Map<String, Object> locationData = Map.of(
-                "latitude", 59.3293,
-                "longitude", 18.0686
-        );
+    private Place testPlace;
+    private PlaceDTO testPlaceDTO;
 
-        when(weatherService.fetchLocationByName("Stockholm")).thenReturn(locationData);
-        when(placeService.existsByCoordinates(59.3293, 18.0686)).thenReturn(true);
-        when(placeService.setFavoriteByCoordinates(59.3293, 18.0686, true)).thenReturn(Optional.of(place));
+    @BeforeEach
+    void setUp() {
+        testPlace = new Place();
+        testPlace.setName("Stockholm");
+        testPlace.setLatitude(59.3293);
+        testPlace.setLongitude(18.0686);
+        testPlace.setFavorite(false);
 
-        // Act
-        ResponseEntity<Map<String, Object>> result = favoritesController.markAsFavorite("Stockholm");
-
-        // Assert
-        assertThat(result.getStatusCodeValue()).isEqualTo(200);
-
-        Map<String, Object> body = result.getBody();
-        assertThat(body).isNotNull();
-        assertThat(body.get("message")).isEqualTo("Place marked as favorite");
-
-        Place returnedPlace = (Place) body.get("place");
-        assertThat(returnedPlace.getName()).isEqualTo("Stockholm");
-        assertThat(returnedPlace.isFavorite()).isTrue();
+        testPlaceDTO = new PlaceDTO();
+        testPlaceDTO.setName("Stockholm");
+        testPlaceDTO.setLatitude(59.3293);
+        testPlaceDTO.setLongitude(18.0686);
+        testPlaceDTO.setFavorite(false);
     }
 
     @Test
-    @DisplayName("markAsFavorite med icke-befintlig plats ska returnera 404")
-    void markAsFavorite_WithNonExistentPlace_ShouldReturn404() {
-        // Arrange
-        when(weatherService.fetchLocationByName("NonExistent")).thenReturn(null);
+    void testAddFavorite_Success() {
+        testPlace.setFavorite(true);
+        testPlaceDTO.setFavorite(true);
 
-        // Act
-        ResponseEntity<Map<String, Object>> result = favoritesController.markAsFavorite("NonExistent");
+        when(placeService.setFavorite(eq("Stockholm"), eq(true)))
+                .thenReturn(Optional.of(testPlace));
+        when(placeMapper.toDTO(testPlace)).thenReturn(testPlaceDTO);
 
-        // Assert
-        assertThat(result.getStatusCodeValue()).isEqualTo(404);
-        verify(placeService, never()).setFavoriteByCoordinates(anyDouble(), anyDouble(), anyBoolean());
+        ResponseEntity<PlaceDTO> response = favoritesController.addFavorite("Stockholm");
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isFavorite());
+        assertEquals("Stockholm", response.getBody().getName());
+
+        verify(placeService).setFavorite("Stockholm", true);
+        verify(placeMapper).toDTO(testPlace);
     }
 
     @Test
-    @DisplayName("removeFromFavorites med befintlig plats ska ta bort från favoriter")
-    void removeFromFavorites_WithExistingPlace_ShouldRemoveFromFavorites() {
-        // Arrange
-        Place place = new Place("Stockholm", 59.3293, 18.0686);
-        place.setFavorite(false);
+    void testAddFavorite_PlaceNotFound() {
+        when(placeService.setFavorite(anyString(), eq(true)))
+                .thenReturn(Optional.empty());
 
-        when(placeService.findByName("Stockholm")).thenReturn(Optional.of(place));
-        when(placeService.setFavoriteByCoordinates(59.3293, 18.0686, false)).thenReturn(Optional.of(place));
+        assertThrows(RuntimeException.class, () -> {
+            favoritesController.addFavorite("NonExistent");
+        });
 
-        // Act
-        ResponseEntity<Map<String, Object>> result = favoritesController.removeFromFavorites("Stockholm");
-
-        // Assert
-        assertThat(result.getStatusCodeValue()).isEqualTo(200);
-
-        Map<String, Object> body = result.getBody();
-        assertThat(body).isNotNull();
-        assertThat(body.get("message")).isEqualTo("Place removed from favorites");
-
-        Place returnedPlace = (Place) body.get("place");
-        assertThat(returnedPlace.getName()).isEqualTo("Stockholm");
-        assertThat(returnedPlace.isFavorite()).isFalse();
+        verify(placeService).setFavorite("NonExistent", true);
+        verify(placeMapper, never()).toDTO(any());
     }
 
     @Test
-    @DisplayName("getFavorites ska returnera alla favoritplatser")
-    void getFavorites_ShouldReturnAllFavorites() {
-        // Arrange
-        Place stockholm = new Place("Stockholm", 59.3293, 18.0686);
-        stockholm.setFavorite(true);
-        Place gothenburg = new Place("Göteborg", 57.7089, 11.9746);
-        gothenburg.setFavorite(true);
+    void testRemoveFavorite_Success() {
+        when(placeService.setFavorite(eq("Stockholm"), eq(false)))
+                .thenReturn(Optional.of(testPlace));
 
-        List<Place> favorites = Arrays.asList(stockholm, gothenburg);
+        ResponseEntity<Void> response = favoritesController.removeFavorite("Stockholm");
+
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+        assertNull(response.getBody());
+
+        verify(placeService).setFavorite("Stockholm", false);
+    }
+
+    @Test
+    void testGetFavorites_WithResults() {
+        Place place1 = new Place();
+        place1.setName("Stockholm");
+        place1.setFavorite(true);
+
+        Place place2 = new Place();
+        place2.setName("Göteborg");
+        place2.setFavorite(true);
+
+        PlaceDTO dto1 = new PlaceDTO();
+        dto1.setName("Stockholm");
+        dto1.setFavorite(true);
+
+        PlaceDTO dto2 = new PlaceDTO();
+        dto2.setName("Göteborg");
+        dto2.setFavorite(true);
+
+        List<Place> favorites = Arrays.asList(place1, place2);
+        List<PlaceDTO> favoriteDTOs = Arrays.asList(dto1, dto2);
+
         when(placeService.findFavorites()).thenReturn(favorites);
+        when(placeMapper.toDTOList(favorites)).thenReturn(favoriteDTOs);
 
-        // Act
-        ResponseEntity<Map<String, Object>> result = favoritesController.getFavorites();
+        ResponseEntity<List<PlaceDTO>> response = favoritesController.getFavorites();
 
-        // Assert
-        assertThat(result.getStatusCodeValue()).isEqualTo(200);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(2, response.getBody().size());
+        assertTrue(response.getBody().stream().allMatch(PlaceDTO::isFavorite));
 
-        Map<String, Object> body = result.getBody();
-        assertThat(body).isNotNull();
-        assertThat(body.get("total_favorites")).isEqualTo(2);
-
-        @SuppressWarnings("unchecked")
-        List<Place> returnedFavorites = (List<Place>) body.get("favorites");
-        assertThat(returnedFavorites).hasSize(2);
-        assertThat(returnedFavorites.get(0).getName()).isEqualTo("Stockholm");
-        assertThat(returnedFavorites.get(1).getName()).isEqualTo("Göteborg");
+        verify(placeService).findFavorites();
+        verify(placeMapper).toDTOList(favorites);
     }
 
     @Test
-    @DisplayName("getFavorites utan favoriter ska returnera tom lista")
-    void getFavorites_WithNoFavorites_ShouldReturnEmptyList() {
-        // Arrange
-        when(placeService.findFavorites()).thenReturn(Collections.emptyList());
+    void testGetFavorites_EmptyList() {
+        when(placeService.findFavorites()).thenReturn(Arrays.asList());
+        when(placeMapper.toDTOList(anyList())).thenReturn(Arrays.asList());
 
-        // Act
-        ResponseEntity<Map<String, Object>> result = favoritesController.getFavorites();
+        ResponseEntity<List<PlaceDTO>> response = favoritesController.getFavorites();
 
-        // Assert
-        assertThat(result.getStatusCodeValue()).isEqualTo(200);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isEmpty());
 
-        Map<String, Object> body = result.getBody();
-        assertThat(body).isNotNull();
-        assertThat(body.get("total_favorites")).isEqualTo(0);
-
-        @SuppressWarnings("unchecked")
-        List<Place> favorites = (List<Place>) body.get("favorites");
-        assertThat(favorites).isEmpty();
+        verify(placeService).findFavorites();
     }
 
     @Test
-    @DisplayName("isFavorite med befintlig plats ska returnera favoritstatus")
-    void isFavorite_WithExistingPlace_ShouldReturnFavoriteStatus() {
-        // Arrange
-        Place place = new Place("Stockholm", 59.3293, 18.0686);
-        place.setFavorite(true);
+    void testIsFavorite_True() {
+        testPlace.setFavorite(true);
 
-        when(placeService.findByName("Stockholm")).thenReturn(Optional.of(place));
+        when(placeService.findByName("Stockholm"))
+                .thenReturn(Optional.of(testPlace));
 
-        // Act
-        ResponseEntity<Map<String, Object>> result = favoritesController.isFavorite("Stockholm");
+        ResponseEntity<Boolean> response = favoritesController.isFavorite("Stockholm");
 
-        // Assert
-        assertThat(result.getStatusCodeValue()).isEqualTo(200);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody());
 
-        Map<String, Object> body = result.getBody();
-        assertThat(body).isNotNull();
-        assertThat(body.get("place")).isEqualTo("Stockholm");
-        assertThat(body.get("is_favorite")).isEqualTo(true);
+        verify(placeService).findByName("Stockholm");
     }
 
     @Test
-    @DisplayName("isFavorite med icke-befintlig plats ska returnera false")
-    void isFavorite_WithNonExistentPlace_ShouldReturnFalse() {
-        // Arrange
-        Map<String, Object> locationData = Map.of(
-                "latitude", 59.0,
-                "longitude", 18.0
-        );
+    void testIsFavorite_False() {
+        testPlace.setFavorite(false);
 
-        when(placeService.findByName("NonExistent")).thenReturn(Optional.empty());
-        when(weatherService.fetchLocationByName("NonExistent")).thenReturn(locationData);
-        when(placeService.findByCoordinates(59.0, 18.0)).thenReturn(Optional.empty());
+        when(placeService.findByName("Stockholm"))
+                .thenReturn(Optional.of(testPlace));
 
-        // Act
-        ResponseEntity<Map<String, Object>> result = favoritesController.isFavorite("NonExistent");
+        ResponseEntity<Boolean> response = favoritesController.isFavorite("Stockholm");
 
-        // Assert
-        assertThat(result.getStatusCodeValue()).isEqualTo(200);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertFalse(response.getBody());
 
-        Map<String, Object> body = result.getBody();
-        assertThat(body).isNotNull();
-        assertThat(body.get("place")).isEqualTo("NonExistent");
-        assertThat(body.get("is_favorite")).isEqualTo(false);
+        verify(placeService).findByName("Stockholm");
     }
 
     @Test
-    @DisplayName("Verifierar att PlaceService anropas korrekt")
-    void shouldCallPlaceServiceCorrectly() {
-        // Arrange
-        Place place = new Place("Test", 0.0, 0.0);
-        Map<String, Object> locationData = Map.of("latitude", 0.0, "longitude", 0.0);
+    void testIsFavorite_PlaceNotFound() {
+        when(placeService.findByName("NonExistent"))
+                .thenReturn(Optional.empty());
 
-        when(weatherService.fetchLocationByName("Test")).thenReturn(locationData);
-        when(placeService.existsByCoordinates(0.0, 0.0)).thenReturn(true);
-        when(placeService.setFavoriteByCoordinates(0.0, 0.0, true)).thenReturn(Optional.of(place));
+        ResponseEntity<Boolean> response = favoritesController.isFavorite("NonExistent");
 
-        // Act
-        favoritesController.markAsFavorite("Test");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertFalse(response.getBody());
 
-        // Assert
-        verify(weatherService).fetchLocationByName("Test");
-        verify(placeService).setFavoriteByCoordinates(0.0, 0.0, true);
+        verify(placeService).findByName("NonExistent");
     }
 }

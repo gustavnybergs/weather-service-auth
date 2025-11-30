@@ -44,7 +44,7 @@ public class UserService {
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(password));
         user.setRoles(Set.of(Role.ROLE_USER));
-        user.setEnabled(false);
+        user.setEnabled(true); // Auto-enable for demo
         user.setCreatedAt(LocalDateTime.now());
 
         User savedUser = userRepository.save(user);

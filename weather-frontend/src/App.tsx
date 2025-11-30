@@ -4,6 +4,8 @@ import Navbar from "./components/Navbar";
 import HomePage from "./pages/HomePage";
 import FavoritesPage from "./pages/FavoritesPage";
 import ForecastPage from "./pages/ForecastPage";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
 
 export default function App() {
     return (
@@ -14,6 +16,8 @@ export default function App() {
                     <Route path="/" element={<HomePage />} />
                     <Route path="/favorites" element={<FavoritesPage />} />
                     <Route path="/forecast" element={<ForecastPage />} />
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/register" element={<RegisterPage />} />
                 </Routes>
             </div>
         </Router>
