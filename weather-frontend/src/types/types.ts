@@ -51,3 +51,25 @@ export type FavCheck = {
 export type FavoritesResponse = {
     favorites: Place[];
 };
+// Auth types
+export type LoginRequest = {
+    username: string;
+    password: string;
+};
+
+export type RegisterRequest = {
+    username: string;
+    email: string;
+    password: string;
+};
+
+export type AuthResponse = {
+    token: string;
+    user: {
+        id: number;
+        username: string;
+        email: string;
+        roles: string[];
+    };
+    message: string;
+};
