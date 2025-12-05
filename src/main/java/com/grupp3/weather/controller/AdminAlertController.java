@@ -10,7 +10,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/admin/alerts")
-@PreAuthorize("hasRole('ADMIN')")  // ← NYTT: Hela controllern kräver ADMIN
+@PreAuthorize("hasRole('ADMIN')")  // NYTT: Hela controllern kräver ADMIN
 public class AdminAlertController {
 
     private final WeatherAlertRepository alertRepository;
